@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Borsa di Classe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>📈</text></svg>">
+</head>
+<body>
+
+<!-- ============ Schermata di accesso ============ -->
+<section id="gate" class="gate">
+  <div class="gate-brand">
+    <h1>Borsa di Classe</h1>
+    <p>Titoli inventati, crediti finti, figuracce vere. I prezzi si muovono ogni minuto, anche mentre non guardi.</p>
+    <ul class="gate-facts">
+      <li><span>100.000</span> crediti all'iscrizione</li>
+      <li><span>8</span> titoli quotati all'apertura</li>
+      <li><span>60s</span> tra un prezzo e il successivo</li>
+    </ul>
+  </div>
+
+  <div class="gate-card">
+    <div class="switch" role="tablist">
+      <button id="tab-accesso" class="switch-on" role="tab">Accedi</button>
+      <button id="tab-registrazione" role="tab">Crea account</button>
+    </div>
+
+    <form id="form-auth" autocomplete="on">
+      <label for="g-username">Nome</label>
+      <input id="g-username" name="username" autocomplete="username" required maxlength="20" placeholder="Come ti chiamano i compagni">
+      <label for="g-password">Password</label>
+      <input id="g-password" name="password" type="password" autocomplete="current-password" required placeholder="Almeno 6 caratteri">
+      <p id="gate-hint" class="hint">Nuovo qui? Ricevi 100.000 crediti appena crei l'account.</p>
+      <p id="gate-error" class="errore" hidden></p>
+      <button id="gate-submit" class="primario" type="submit">Entra nel mercato</button>
+    </form>
+  </div>
+</section>
+
+<!-- ============ Applicazione ============ -->
+<div id="app" hidden>
+
+  <div class="nastro" id="nastro" aria-label="Prezzi in tempo reale">
+    <div class="nastro-scorre" id="nastro-scorre"></div>
+  </div>
+
+  <header class="testata">
+    <div class="marchio">Borsa di Classe</div>
+    <nav id="menu">
+      <button data-vista="mercato" class="attivo">Mercato</button>
+      <button data-vista="portafoglio">Portafoglio</button>
+      <button data-vista="classifica">Classifica</button>
+      <button data-vista="notizie">Notizie</button>
+      <button data-vista="admin" id="voce-admin" hidden>Amministrazione</button>
+    </nav>
+    <div class="conto">
+      <div class="conto-valore"><span id="h-patrimonio">–</span><small>patrimonio</small></div>
+      <div class="conto-valore"><span id="h-crediti">–</span><small>crediti liberi</small></div>
+      <div class="conto-chi">
+        <strong id="h-utente">–</strong>
+        <button id="esci" class="link">Esci</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Mercato -->
+    <section id="vista-mercato" class="vista">
+      <div class="colonne">
+        <div class="listino">
+          <div class="listino-testa">
+            <h2>Listino</h2>
+            <span id="conto-tick" class="conto-tick"></span>
+          </div>
+          <table class="tabella listino-tab">
+            <thead><tr><th>Titolo</th><th class="num">Prezzo</th><th class="num">Var.</th></tr></thead>
+            <tbody id="corpo-listino"></tbody>
+          </table>
+        </div>
+
+        <div class="scheda">
+          <div class="scheda-testa">
+            <div>
+              <h2 id="s-nome">–</h2>
+              <p id="s-settore" class="sotto">–</p>
+            </div>
+            <div class="scheda-prezzo">
+              <span id="s-prezzo" class="mono grande">–</span>
+              <span id="s-var" class="pillola">–</span>
+            </div>
+          </div>
+
+          <svg id="grafico-titolo" class="grafico" viewBox="0 0 640 220" preserveAspectRatio="none" role="img" aria-label="Andamento del titolo"></svg>
+          <div class="grafico-assi"><span id="g-min">–</span><span id="g-max">–</span></div>
+
+          <div class="stat-riga" id="stat-titolo"></div>
+
+          <div class="ordine">
+            <div class="ordine-campo">
+              <label for="quantita">Quantità</label>
+              <input id="quantita" type="number" min="1" step="1" value="10">
+            </div>
+            <div class="ordine-costo">
+              <span id="costo-stima" class="mono">–</span>
+              <small>controvalore</small>
+            </div>
+            <div class="ordine-bottoni">
+              <button id="btn-compra" class="compra">Compra</button>
+              <button id="btn-vendi" class="vendi">Vendi</button>
+            </div>
+          </div>
+          <p id="msg-ordine" class="msg" hidden></p>
+          <p id="posseduto" class="sotto"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Portafoglio -->
+    <section id="vista-portafoglio" class="vista" hidden>
+      <div class="riepilogo" id="riepilogo"></div>
+      <div class="colonne-2">
+        <div class="pannello">
+          <h2>Valore del portafoglio</h2>
+          <svg id="grafico-portafoglio" class="grafico" viewBox="0 0 640 200" preserveAspectRatio="none" role="img" aria-label="Andamento del patrimonio"></svg>
+          <div class="grafico-assi"><span id="p-min">–</span><span id="p-max">–</span></div>
+        </div>
+        <div class="pannello">
+          <h2>Composizione</h2>
+          <div id="barra-composizione" class="composizione"></div>
+          <div id="legenda-composizione" class="legenda"></div>
+        </div>
+      </div>
+      <div class="pannello">
+        <h2>Le tue posizioni</h2>
+        <table class="tabella">
+          <thead><tr><th>Titolo</th><th class="num">Quantità</th><th class="num">Prezzo medio</th><th class="num">Prezzo ora</th><th class="num">Valore</th><th class="num">Utile/perdita</th></tr></thead>
+          <tbody id="corpo-posizioni"></tbody>
+        </table>
+      </div>
+      <div class="pannello">
+        <h2>Storico operazioni</h2>
+        <table class="tabella">
+          <thead><tr><th>Quando</th><th>Operazione</th><th>Titolo</th><th class="num">Quantità</th><th class="num">Prezzo</th><th class="num">Totale</th></tr></thead>
+          <tbody id="corpo-operazioni"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Classifica -->
+    <section id="vista-classifica" class="vista" hidden>
+      <div class="pannello">
+        <h2>Chi sta vincendo</h2>
+        <table class="tabella">
+          <thead><tr><th>#</th><th>Investitore</th><th class="num">Patrimonio</th><th class="num">Crediti liberi</th><th class="num">Rendimento</th><th class="num">Operazioni</th></tr></thead>
+          <tbody id="corpo-classifica"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Notizie -->
+    <section id="vista-notizie" class="vista" hidden>
+      <div class="pannello">
+        <h2>Cosa si dice sul mercato</h2>
+        <ul id="lista-notizie" class="notizie"></ul>
+      </div>
+    </section>
+
+    <!-- Amministrazione -->
+    <section id="vista-admin" class="vista" hidden>
+      <div class="colonne-2">
+        <div class="pannello">
+          <h2>Quota un titolo</h2>
+          <div class="modulo">
+            <input id="a-sigla" placeholder="Sigla (es. QNT)" maxlength="5">
+            <input id="a-nome" placeholder="Nome della società">
+            <input id="a-settore" placeholder="Settore">
+            <input id="a-prezzo" type="number" step="0.01" placeholder="Prezzo di partenza">
+            <input id="a-vol" type="number" step="0.001" placeholder="Volatilità (0.02 = calmo)">
+            <button id="a-aggiungi" class="primario">Quota il titolo</button>
+          </div>
+        </div>
+        <div class="pannello">
+          <h2>Scuoti il mercato</h2>
+          <div class="modulo">
+            <select id="e-sigla"></select>
+            <input id="e-perc" type="number" step="0.1" placeholder="Variazione % (es. -20)">
+            <input id="e-testo" placeholder="Titolo della notizia (facoltativo)">
+            <button id="e-lancia" class="primario">Applica l'evento</button>
+          </div>
+          <div class="modulo">
+            <input id="n-testo" placeholder="Pubblica una notizia">
+            <button id="n-pubblica">Pubblica</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pannello">
+        <h2>Titoli quotati</h2>
+        <table class="tabella">
+          <thead><tr><th>Sigla</th><th>Nome</th><th class="num">Prezzo</th><th class="num">Volatilità</th><th>Stato</th><th></th></tr></thead>
+          <tbody id="corpo-admin-titoli"></tbody>
+        </table>
+      </div>
+
+      <div class="pannello">
+        <h2>Investitori</h2>
+        <table class="tabella">
+          <thead><tr><th>Nome</th><th class="num">Crediti</th><th class="num">Patrimonio</th><th>Stato</th><th>Crediti</th><th>Azioni</th></tr></thead>
+          <tbody id="corpo-admin-utenti"></tbody>
+        </table>
+      </div>
+      <p id="msg-admin" class="msg" hidden></p>
+    </section>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
