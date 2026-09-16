@@ -167,7 +167,9 @@ function disegnaNastro() {
       return `<span><b>${t.sigla}</b> ${fmt(t.prezzo)} <em class="${segno(v)}">${conSegno(v)}%</em></span>`;
     })
     .join("");
-  $("nastro-scorre").innerHTML = pezzi + pezzi;
+  $("nastro-scorre").innerHTML = pezzi
+    ? pezzi + pezzi
+    : `<span>Nessun titolo quotato: il mercato aspetta l'Admin.</span>`;
 }
 
 function disegnaConteggio() {
@@ -189,8 +191,9 @@ function disegnaListino() {
         <td class="num mono ${segno(v)}">${conSegno(v)}%</td>
       </tr>`;
     })
-    .join("");
-  corpo.querySelectorAll("tr").forEach((tr) => {
+    .join("") ||
+    `<tr><td colspan="3" class="vuoto">Il listino è vuoto.</td></tr>`;
+  corpo.querySelectorAll("tr[data-sigla]").forEach((tr) => {
     tr.onclick = () => {
       sceltoSigla = tr.dataset.sigla;
       disegnaListino();
@@ -233,7 +236,25 @@ function titoloScelto() {
 
 function disegnaScheda() {
   const t = titoloScelto();
-  if (!t) return;
+  if (!t) {
+    $("s-nome").textContent = "Nessun titolo da scambiare";
+    $("s-settore").textContent =
+      S.io.ruolo === "admin"
+        ? "Vai in Amministrazione e quota il primo titolo."
+        : "L'Admin non ha ancora quotato nessun titolo. Torna tra poco.";
+    $("s-prezzo").textContent = "–";
+    $("s-var").textContent = "–";
+    $("s-var").className = "pillola";
+    disegnaLinea($("grafico-titolo"), [], "#67707E");
+    $("g-min").textContent = "";
+    $("g-max").textContent = "";
+    $("stat-titolo").innerHTML = "";
+    $("posseduto").textContent = "";
+    $("costo-stima").textContent = "–";
+    $("btn-compra").disabled = true;
+    $("btn-vendi").disabled = true;
+    return;
+  }
   const vTot = variazioneTotale(t);
   const prezzi = t.storico.map((p) => p.p);
 
@@ -442,8 +463,10 @@ function disegnaAdmin() {
       <td>${t.attivo ? "quotato" : "ritirato"}</td>
       <td class="riga-azioni">
         <button class="mini" data-titolo="${t.attivo ? "rimuovi" : "riattiva"}" data-sigla="${t.sigla}">${t.attivo ? "Ritira" : "Riquota"}</button>
+        <button class="mini pericolo" data-elimina="${t.sigla}">Elimina</button>
       </td>
-    </tr>`).join("");
+    </tr>`).join("") ||
+    `<tr><td colspan="6" class="vuoto">Nessun titolo quotato. Aggiungine uno qui sopra.</td></tr>`;
 
   $("corpo-admin-utenti").innerHTML = S.classifica.map((u) => `<tr>
       <td>${esc(u.username)}${u.ruolo === "admin" ? " <small class='sotto'>admin</small>" : ""}</td>
@@ -466,6 +489,17 @@ function disegnaAdmin() {
 
   document.querySelectorAll("[data-titolo]").forEach((b) => {
     b.onclick = () => azioneAdmin("admin/titolo", { azione: b.dataset.titolo, sigla: b.dataset.sigla });
+  });
+  document.querySelectorAll("[data-elimina]").forEach((b) => {
+    b.onclick = () => {
+      const sigla = b.dataset.elimina;
+      const t = S.titoli.find((x) => x.sigla === sigla);
+      if (!confirm(`Eliminare ${sigla} per sempre? Sparisce dal listino, dai grafici e dalle notizie, e non si può annullare.`)) return;
+      const rimborsa = confirm(
+        `Chi possiede ${sigla} cosa riceve?\n\nOK = rimborso al prezzo attuale di ${fmt(t.prezzo)} crediti\nAnnulla = niente, le azioni vanno in fumo`
+      );
+      azioneAdmin("admin/titolo", { azione: "elimina", sigla, rimborsa });
+    };
   });
   document.querySelectorAll("[data-crediti]").forEach((b) => {
     b.onclick = () => {
