@@ -122,16 +122,10 @@ function soloAdmin(utente) {
 /* Mercato                                                             */
 /* ------------------------------------------------------------------ */
 
-const TITOLI_INIZIALI = [
-  ["VLT", "Volta Dynamics", "Energia", 84.2, 0.018],
-  ["NBL", "Nebula Robotics", "Tecnologia", 152.4, 0.028],
-  ["FRN", "Fornaio Digitale", "Alimentare", 23.8, 0.012],
-  ["ORS", "Orsa Maggiore Biotech", "Salute", 61.1, 0.032],
-  ["KPR", "Kaper Logistica", "Trasporti", 39.5, 0.015],
-  ["ZTA", "Zeta Quantum", "Tecnologia", 210.0, 0.035],
-  ["MRL", "Merlino Games", "Intrattenimento", 12.75, 0.04],
-  ["SLC", "Salice Agritech", "Agricoltura", 47.3, 0.014],
-];
+// Il listino parte vuoto: i titoli li quota l'Admin dal pannello.
+// Se vuoi dei titoli già pronti al primo avvio, aggiungili qui prima di
+// pubblicare il sito, nel formato: ["SIGLA", "Nome", "Settore", prezzo, volatilità]
+const TITOLI_INIZIALI = [];
 
 function mercatoIniziale() {
   const ora = Date.now();
@@ -151,7 +145,11 @@ function mercatoIniziale() {
       storico: [{ t: ora, p: prezzo }],
     })),
     notizie: [
-      { t: ora, testo: "Le contrattazioni sono aperte. Buona fortuna.", tipo: "neutro" },
+      {
+        t: ora,
+        testo: "Il listino è vuoto: l'Admin deve ancora quotare il primo titolo.",
+        tipo: "neutro",
+      },
     ],
     classifica: [],
   };
@@ -458,6 +456,64 @@ async function adminTitolo(s, utente, body) {
     const t = titolo(m, body.sigla);
     if (!t) throw new ErroreUtente("Titolo non trovato.");
     t.attivo = true;
+  } else if (azione === "elimina") {
+    // Cancellazione definitiva: il titolo sparisce dal listino e dai grafici.
+    // Le azioni in circolazione vanno liquidate, altrimenti restano in mano
+    // agli utenti senza un prezzo a cui valutarle.
+    const t = titolo(m, body.sigla);
+    if (!t) throw new ErroreUtente("Titolo non trovato.");
+    const rimborsa = body.rimborsa !== false;
+    const prezzoFinale = arrotonda(t.prezzo);
+    let azionisti = 0;
+
+    const { blobs } = await s.list({ prefix: "user:" });
+    for (const b of blobs) {
+      const u = await s.get(b.key, { type: "json" });
+      const pos = u?.posizioni?.[t.sigla];
+      if (!pos) continue;
+      azionisti++;
+      if (rimborsa) {
+        const totale = arrotonda(pos.quantita * prezzoFinale);
+        u.crediti = arrotonda(u.crediti + totale);
+        u.realizzato = arrotonda(
+          (u.realizzato || 0) + (prezzoFinale - pos.prezzoMedio) * pos.quantita
+        );
+        u.operazioni = u.operazioni || [];
+        u.operazioni.unshift({
+          t: Date.now(),
+          sigla: t.sigla,
+          operazione: "vendi",
+          quantita: pos.quantita,
+          prezzo: prezzoFinale,
+          totale,
+          nota: "liquidazione del titolo eliminato",
+        });
+      }
+      delete u.posizioni[t.sigla];
+      await salvaUtente(s, u);
+    }
+
+    m.titoli = m.titoli.filter((x) => x.sigla !== t.sigla);
+    m.notizie = m.notizie.filter((n) => n.sigla !== t.sigla);
+    m.notizie.unshift({
+      t: Date.now(),
+      testo: rimborsa
+        ? `${t.nome} lascia la borsa: le azioni sono state liquidate a ${prezzoFinale.toFixed(2)} crediti.`
+        : `${t.nome} fallisce: le azioni non valgono più nulla.`,
+      tipo: rimborsa ? "neutro" : "crollo",
+    });
+    await ricostruisciClassifica(s, m);
+    await salvaMercato(s, m);
+    return json({
+      stato: statoPubblico(utente, m),
+      messaggio: azionisti
+        ? `${t.sigla} eliminato. ${azionisti} ${
+            azionisti === 1
+              ? rimborsa ? "azionista rimborsato" : "azionista azzerato"
+              : rimborsa ? "azionisti rimborsati" : "azionisti azzerati"
+          }.`
+        : `${t.sigla} eliminato.`,
+    });
   } else if (azione === "modifica") {
     const t = titolo(m, body.sigla);
     if (!t) throw new ErroreUtente("Titolo non trovato.");
