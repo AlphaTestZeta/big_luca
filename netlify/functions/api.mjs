@@ -6,9 +6,9 @@ import crypto from "node:crypto";
 /* ------------------------------------------------------------------ */
 
 const CREDITI_INIZIALI = 100000;   // crediti regalati a ogni nuovo account
-const TICK_MS = 60_000;            // un aggiornamento dei prezzi al minuto
-const MAX_RECUPERO = 120;          // al massimo 2 ore di prezzi recuperati
-const MAX_STORICO = 180;           // punti tenuti nel grafico di ogni titolo
+const TICK_MS = 20_000;            // un aggiornamento dei prezzi ogni 20 secondi
+const MAX_RECUPERO = 360;          // al massimo 2 ore di prezzi recuperati (360 x 20s)
+const MAX_STORICO = 360;           // punti tenuti nel grafico di ogni titolo (2 ore a 20s)
 const SEGRETO = process.env.SESSION_SECRET || "cambia-questa-chiave-nelle-variabili-netlify";
 
 const db = () => getStore({ name: "borsa", consistency: "strong" });
@@ -146,6 +146,7 @@ function mercatoIniziale() {
     })),
     notizie: [
       {
+        id: crypto.randomUUID(),
         t: ora,
         testo: "Il listino è vuoto: l'Admin deve ancora quotare il primo titolo.",
         tipo: "neutro",
@@ -205,6 +206,7 @@ function passoMercato(m) {
     const forza = 0.08 + Math.random() * 0.22;
     t.prezzo = Math.max(0.5, arrotonda(t.prezzo * (salita ? 1 + forza : 1 - forza)));
     m.notizie.unshift({
+      id: crypto.randomUUID(),
       t: m.ultimoTick,
       testo: scegli(salita ? TITOLI_NOTIZIE_BUONE : TITOLI_NOTIZIE_CATTIVE)(t.nome),
       tipo: salita ? "boom" : "crollo",
@@ -214,6 +216,7 @@ function passoMercato(m) {
   } else if (Math.random() < 0.15) {
     const t = scegli(attivi);
     m.notizie.unshift({
+      id: crypto.randomUUID(),
       t: m.ultimoTick,
       testo: scegli(NOTIZIE_NEUTRE)(t.nome, t.prezzo.toFixed(2)),
       tipo: "neutro",
@@ -275,6 +278,26 @@ async function ricostruisciClassifica(s, m) {
   return righe;
 }
 
+function ripulisciDoppioni(m) {
+  // Difesa contro corse critiche: se due richieste dell'admin arrivano
+  // quasi insieme possono entrambe superare il controllo "esiste già" prima
+  // che una delle due venga salvata, creando due titoli con la stessa sigla.
+  // Qui li fondiamo tenendo il primo (preferendo quello attivo).
+  const visti = new Map();
+  let cambiato = false;
+  for (const t of m.titoli) {
+    const esistente = visti.get(t.sigla);
+    if (!esistente) {
+      visti.set(t.sigla, t);
+    } else {
+      cambiato = true;
+      if (!esistente.attivo && t.attivo) visti.set(t.sigla, t);
+    }
+  }
+  if (cambiato) m.titoli = [...visti.values()];
+  return cambiato;
+}
+
 async function caricaMercato(s, { forzaClassifica = false } = {}) {
   let m = await s.get("market", { type: "json" });
   let nuovo = false;
@@ -284,7 +307,8 @@ async function caricaMercato(s, { forzaClassifica = false } = {}) {
     await creaAdminSeNonEsiste(s);
   }
   const passi = avanzaMercato(m);
-  if (passi > 0 || nuovo || forzaClassifica) {
+  const doppioniRimossi = ripulisciDoppioni(m);
+  if (passi > 0 || nuovo || forzaClassifica || doppioniRimossi) {
     await ricostruisciClassifica(s, m);
     await s.set("market", JSON.stringify(m));
   }
@@ -446,16 +470,25 @@ async function adminTitolo(s, utente, body) {
       scambi: 0,
       storico: [{ t: Date.now(), p: arrotonda(prezzo) }],
     });
-    m.notizie.unshift({ t: Date.now(), testo: `Nuova quotazione: ${sigla}.`, tipo: "neutro", sigla });
+    m.notizie.unshift({ id: crypto.randomUUID(), t: Date.now(), testo: `Nuova quotazione: ${sigla}.`, tipo: "neutro", sigla });
+    await ricostruisciClassifica(s, m);
+    await salvaMercato(s, m);
+    return json({ stato: statoPubblico(utente, m), messaggio: `${sigla} quotato in borsa.` });
   } else if (azione === "rimuovi") {
     const t = titolo(m, body.sigla);
     if (!t) throw new ErroreUtente("Titolo non trovato.");
     t.attivo = false;
-    m.notizie.unshift({ t: Date.now(), testo: `${t.nome} esce dal listino.`, tipo: "crollo", sigla: t.sigla });
+    m.notizie.unshift({ id: crypto.randomUUID(), t: Date.now(), testo: `${t.nome} esce dal listino.`, tipo: "crollo", sigla: t.sigla });
+    await ricostruisciClassifica(s, m);
+    await salvaMercato(s, m);
+    return json({ stato: statoPubblico(utente, m), messaggio: `${t.sigla} ritirato dagli scambi.` });
   } else if (azione === "riattiva") {
     const t = titolo(m, body.sigla);
     if (!t) throw new ErroreUtente("Titolo non trovato.");
     t.attivo = true;
+    await ricostruisciClassifica(s, m);
+    await salvaMercato(s, m);
+    return json({ stato: statoPubblico(utente, m), messaggio: `${t.sigla} rimesso in listino.` });
   } else if (azione === "elimina") {
     // Cancellazione definitiva: il titolo sparisce dal listino e dai grafici.
     // Le azioni in circolazione vanno liquidate, altrimenti restano in mano
@@ -496,6 +529,7 @@ async function adminTitolo(s, utente, body) {
     m.titoli = m.titoli.filter((x) => x.sigla !== t.sigla);
     m.notizie = m.notizie.filter((n) => n.sigla !== t.sigla);
     m.notizie.unshift({
+      id: crypto.randomUUID(),
       t: Date.now(),
       testo: rimborsa
         ? `${t.nome} lascia la borsa: le azioni sono state liquidate a ${prezzoFinale.toFixed(2)} crediti.`
@@ -517,10 +551,21 @@ async function adminTitolo(s, utente, body) {
   } else if (azione === "modifica") {
     const t = titolo(m, body.sigla);
     if (!t) throw new ErroreUtente("Titolo non trovato.");
-    if (body.prezzo !== undefined && Number(body.prezzo) > 0) t.prezzo = arrotonda(Number(body.prezzo));
-    if (body.volatilita !== undefined)
-      t.volatilita = Math.min(0.2, Math.max(0.002, Number(body.volatilita)));
+    if (body.prezzo !== undefined && body.prezzo !== "") {
+      const p = Number(body.prezzo);
+      if (!(p > 0)) throw new ErroreUtente("Il prezzo deve essere maggiore di zero.");
+      t.prezzo = arrotonda(p);
+    }
+    if (body.volatilita !== undefined && body.volatilita !== "") {
+      const v = Number(body.volatilita);
+      if (!Number.isFinite(v)) throw new ErroreUtente("Volatilità non valida.");
+      t.volatilita = Math.min(0.2, Math.max(0.002, v));
+    }
     if (body.nome) t.nome = String(body.nome).trim().slice(0, 40);
+    t.storico.push({ t: Date.now(), p: t.prezzo });
+    await ricostruisciClassifica(s, m);
+    await salvaMercato(s, m);
+    return json({ stato: statoPubblico(utente, m), messaggio: `${t.sigla} aggiornato: prezzo e volatilità salvati.` });
   } else {
     throw new ErroreUtente("Azione sconosciuta.");
   }
@@ -582,6 +627,7 @@ async function adminEvento(s, utente, body) {
   t.prezzo = Math.max(0.5, arrotonda(t.prezzo * (1 + percentuale / 100)));
   t.storico.push({ t: Date.now(), p: t.prezzo });
   m.notizie.unshift({
+    id: crypto.randomUUID(),
     t: Date.now(),
     testo:
       body.testo?.trim() ||
@@ -594,18 +640,28 @@ async function adminEvento(s, utente, body) {
   });
   await ricostruisciClassifica(s, m);
   await salvaMercato(s, m);
-  return json({ stato: statoPubblico(utente, m) });
+  return json({ stato: statoPubblico(utente, m), messaggio: `Evento applicato a ${t.sigla}.` });
 }
 
 async function adminNotizia(s, utente, body) {
   soloAdmin(utente);
+  const m = await caricaMercato(s);
+
+  if (body.azione === "elimina") {
+    const id = String(body.id || "");
+    const prima = m.notizie.length;
+    m.notizie = m.notizie.filter((n) => n.id !== id);
+    if (m.notizie.length === prima) throw new ErroreUtente("Notizia non trovata: probabilmente qualcuno l'ha già eliminata.");
+    await salvaMercato(s, m);
+    return json({ stato: statoPubblico(utente, m), messaggio: "Notizia eliminata." });
+  }
+
   const testo = String(body.testo || "").trim().slice(0, 160);
   if (!testo) throw new ErroreUtente("Scrivi il testo della notizia.");
-  const m = await caricaMercato(s);
-  m.notizie.unshift({ t: Date.now(), testo, tipo: "neutro", autore: utente.username });
+  m.notizie.unshift({ id: crypto.randomUUID(), t: Date.now(), testo, tipo: "neutro", autore: utente.username });
   if (m.notizie.length > 60) m.notizie.length = 60;
   await salvaMercato(s, m);
-  return json({ stato: statoPubblico(utente, m) });
+  return json({ stato: statoPubblico(utente, m), messaggio: "Notizia pubblicata." });
 }
 
 /* ------------------------------------------------------------------ */
