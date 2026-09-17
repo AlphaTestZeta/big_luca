@@ -95,8 +95,10 @@
             </div>
           </div>
 
-          <svg id="grafico-titolo" class="grafico" viewBox="0 0 640 220" preserveAspectRatio="none" role="img" aria-label="Andamento del titolo"></svg>
-          <div class="grafico-assi"><span id="g-min">–</span><span id="g-max">–</span></div>
+          <div class="grafico-cont">
+            <svg id="grafico-titolo" class="grafico" viewBox="0 0 640 220" preserveAspectRatio="none" role="img" aria-label="Andamento del titolo"></svg>
+            <div id="tip-titolo" class="grafico-tip" hidden></div>
+          </div>
 
           <div class="stat-riga" id="stat-titolo"></div>
 
@@ -126,8 +128,10 @@
       <div class="colonne-2">
         <div class="pannello">
           <h2>Valore del portafoglio</h2>
-          <svg id="grafico-portafoglio" class="grafico" viewBox="0 0 640 200" preserveAspectRatio="none" role="img" aria-label="Andamento del patrimonio"></svg>
-          <div class="grafico-assi"><span id="p-min">–</span><span id="p-max">–</span></div>
+          <div class="grafico-cont">
+            <svg id="grafico-portafoglio" class="grafico" viewBox="0 0 640 200" preserveAspectRatio="none" role="img" aria-label="Andamento del patrimonio"></svg>
+            <div id="tip-portafoglio" class="grafico-tip" hidden></div>
+          </div>
         </div>
         <div class="pannello">
           <h2>Composizione</h2>
@@ -201,6 +205,7 @@
 
       <div class="pannello">
         <h2>Titoli quotati</h2>
+        <p class="sotto" style="margin-bottom:.8rem">Modifica prezzo e volatilità anche su un titolo ritirato, poi premi «Salva».</p>
         <table class="tabella">
           <thead><tr><th>Sigla</th><th>Nome</th><th class="num">Prezzo</th><th class="num">Volatilità</th><th>Stato</th><th></th></tr></thead>
           <tbody id="corpo-admin-titoli"></tbody>

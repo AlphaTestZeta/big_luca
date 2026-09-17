@@ -16,6 +16,7 @@ const numero = new Intl.NumberFormat("it-IT", { minimumFractionDigits: 2, maximu
 const intero = new Intl.NumberFormat("it-IT");
 const fmt = (n) => numero.format(Number(n) || 0);
 const ora = (t) => new Date(t).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+const oraSec = (t) => new Date(t).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 const dataOra = (t) => new Date(t).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 const segno = (n) => (n > 0 ? "su" : n < 0 ? "giu" : "pari");
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) =>
@@ -204,28 +205,96 @@ function disegnaListino() {
 
 /* ---------- Grafici ---------- */
 
-function disegnaLinea(svg, valori, colore) {
-  const w = 640, h = svg.id === "grafico-portafoglio" ? 200 : 220, pad = 14;
-  if (!valori || valori.length < 2) {
-    svg.innerHTML = `<text x="${w / 2}" y="${h / 2}" text-anchor="middle" fill="#67707E" font-size="13" font-family="Archivo">Non ci sono ancora abbastanza dati</text>`;
-    return { min: 0, max: 0 };
+function disegnaGrafico(svg, tip, punti, colore, formattaTempo) {
+  const w = 640;
+  const h = svg.id === "grafico-portafoglio" ? 200 : 220;
+  const padSx = 54, padDx = 12, padSu = 12, padGiu = 12;
+  const largh = w - padSx - padDx;
+  const alt = h - padSu - padGiu;
+
+  if (tip) tip.hidden = true;
+
+  if (!punti || punti.length < 2) {
+    svg.innerHTML = `<text x="${w / 2}" y="${h / 2}" text-anchor="middle" fill="#96A0AD" font-size="13" font-family="Archivo, sans-serif">Non ci sono ancora abbastanza dati</text>`;
+    return;
   }
-  const min = Math.min(...valori), max = Math.max(...valori);
-  const spazio = max - min || Math.abs(max) * 0.05 || 1;
-  const x = (i) => pad + (i * (w - pad * 2)) / (valori.length - 1);
-  const y = (v) => h - pad - ((v - min) / spazio) * (h - pad * 2);
-  const punti = valori.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" L");
-  const area = `M${punti.replace(/ L/g, " L")} L${x(valori.length - 1).toFixed(1)},${h} L${x(0).toFixed(1)},${h} Z`;
-  const id = svg.id + "-grad";
+
+  const valori = punti.map((p) => p.v);
+  let min = Math.min(...valori), max = Math.max(...valori);
+  if (min === max) { const m = Math.abs(min) * 0.05 || 1; min -= m; max += m; }
+  const margine = (max - min) * 0.1;
+  min -= margine; max += margine;
+
+  const x = (i) => padSx + (i * largh) / (punti.length - 1);
+  const y = (v) => padSu + alt - ((v - min) / (max - min)) * alt;
+
+  // Griglia orizzontale con i valori a sinistra
+  const PASSI = 4;
+  let griglia = "";
+  for (let k = 0; k <= PASSI; k++) {
+    const v = min + ((max - min) * k) / PASSI;
+    const yy = y(v);
+    griglia += `<line x1="${padSx}" y1="${yy.toFixed(1)}" x2="${w - padDx}" y2="${yy.toFixed(1)}" stroke="#E7E9ED" stroke-width="1"/>
+      <text x="${padSx - 8}" y="${(yy + 3.5).toFixed(1)}" text-anchor="end" font-size="10.5" font-family="Roboto Mono, monospace" fill="#8791A0">${fmt(v)}</text>`;
+  }
+
+  const puntiLinea = punti.map((p, i) => `${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join(" L");
+  const area = `M${puntiLinea} L${x(punti.length - 1).toFixed(1)},${padSu + alt} L${x(0).toFixed(1)},${padSu + alt} Z`;
+  const gid = svg.id + "-grad";
+
   svg.innerHTML = `
-    <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1">
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${colore}" stop-opacity="0.16"/>
       <stop offset="100%" stop-color="${colore}" stop-opacity="0"/>
     </linearGradient></defs>
-    <path d="${area}" fill="url(#${id})"/>
-    <path d="M${punti}" fill="none" stroke="${colore}" stroke-width="2"
-          vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
-  return { min, max };
+    ${griglia}
+    <path d="${area}" fill="url(#${gid})"/>
+    <path d="M${puntiLinea}" fill="none" stroke="${colore}" stroke-width="2"
+          stroke-linejoin="round" stroke-linecap="round"/>
+    <line class="linea-al-passaggio" x1="0" y1="${padSu}" x2="0" y2="${padSu + alt}"
+          stroke="#8791A0" stroke-width="1" stroke-dasharray="3,3" opacity="0"/>
+    <circle class="punto-al-passaggio" r="4.5" fill="${colore}" stroke="#fff" stroke-width="1.5" opacity="0"/>
+    <rect class="area-al-passaggio" x="${padSx}" y="${padSu}" width="${largh}" height="${alt}"
+          fill="transparent" style="cursor:crosshair;touch-action:none"/>`;
+
+  if (!tip) return;
+
+  const linea = svg.querySelector(".linea-al-passaggio");
+  const punto = svg.querySelector(".punto-al-passaggio");
+  const area2 = svg.querySelector(".area-al-passaggio");
+  const contenitore = svg.parentElement;
+
+  const mostraTip = (clientX) => {
+    const box = svg.getBoundingClientRect();
+    const scalaX = w / box.width;
+    const xLocale = (clientX - box.left) * scalaX;
+    let i = Math.round(((xLocale - padSx) / largh) * (punti.length - 1));
+    i = Math.max(0, Math.min(punti.length - 1, i));
+    const p = punti[i];
+    const cx = x(i), cy = y(p.v);
+
+    linea.setAttribute("x1", cx.toFixed(1));
+    linea.setAttribute("x2", cx.toFixed(1));
+    linea.setAttribute("opacity", "1");
+    punto.setAttribute("cx", cx.toFixed(1));
+    punto.setAttribute("cy", cy.toFixed(1));
+    punto.setAttribute("opacity", "1");
+
+    const boxCont = contenitore.getBoundingClientRect();
+    tip.style.left = `${box.left - boxCont.left + (cx / w) * box.width}px`;
+    tip.style.top = `${box.top - boxCont.top + (cy / h) * box.height}px`;
+    tip.innerHTML = `<b>${fmt(p.v)}</b><small>${(formattaTempo || oraSec)(p.t)}</small>`;
+    tip.hidden = false;
+  };
+  const nascondiTip = () => {
+    linea.setAttribute("opacity", "0");
+    punto.setAttribute("opacity", "0");
+    tip.hidden = true;
+  };
+
+  area2.addEventListener("pointermove", (e) => mostraTip(e.clientX));
+  area2.addEventListener("pointerdown", (e) => mostraTip(e.clientX));
+  area2.addEventListener("pointerleave", nascondiTip);
 }
 
 /* ---------- Scheda del titolo ---------- */
@@ -245,9 +314,7 @@ function disegnaScheda() {
     $("s-prezzo").textContent = "–";
     $("s-var").textContent = "–";
     $("s-var").className = "pillola";
-    disegnaLinea($("grafico-titolo"), [], "#67707E");
-    $("g-min").textContent = "";
-    $("g-max").textContent = "";
+    disegnaGrafico($("grafico-titolo"), $("tip-titolo"), [], "#67707E");
     $("stat-titolo").innerHTML = "";
     $("posseduto").textContent = "";
     $("costo-stima").textContent = "–";
@@ -257,6 +324,7 @@ function disegnaScheda() {
   }
   const vTot = variazioneTotale(t);
   const prezzi = t.storico.map((p) => p.p);
+  const puntiGrafico = t.storico.map((p) => ({ t: p.t, v: p.p }));
 
   $("s-nome").textContent = `${t.nome} · ${t.sigla}`;
   $("s-settore").textContent = t.attivo ? t.settore : `${t.settore} — titolo ritirato dal listino`;
@@ -266,9 +334,7 @@ function disegnaScheda() {
   pill.className = `pillola ${segno(vTot)}`;
 
   const colore = vTot >= 0 ? "#0E8A6A" : "#D1425A";
-  const { min, max } = disegnaLinea($("grafico-titolo"), prezzi, colore);
-  $("g-min").textContent = prezzi.length > 1 ? `minimo ${fmt(min)}` : "";
-  $("g-max").textContent = prezzi.length > 1 ? `massimo ${fmt(max)}` : "";
+  disegnaGrafico($("grafico-titolo"), $("tip-titolo"), puntiGrafico, colore, oraSec);
 
   const media = prezzi.reduce((a, b) => a + b, 0) / (prezzi.length || 1);
   const vari = prezzi.length > 1
@@ -346,10 +412,8 @@ function disegnaPortafoglio() {
     <div><b class="${segno(io.realizzato)}">${conSegno(io.realizzato)}</b><small>utile già incassato</small></div>
     <div><b class="${segno(rendimento)}">${conSegno(rendimento)}%</b><small>rispetto ai 100.000 iniziali</small></div>`;
 
-  const valori = (io.storicoValore || []).map((p) => p.v);
-  const { min, max } = disegnaLinea($("grafico-portafoglio"), valori, rendimento >= 0 ? "#0E8A6A" : "#D1425A");
-  $("p-min").textContent = valori.length > 1 ? `minimo ${fmt(min)}` : "";
-  $("p-max").textContent = valori.length > 1 ? `massimo ${fmt(max)}` : "";
+  const puntiValore = (io.storicoValore || []).map((p) => ({ t: p.t, v: p.v }));
+  disegnaGrafico($("grafico-portafoglio"), $("tip-portafoglio"), puntiValore, rendimento >= 0 ? "#0E8A6A" : "#D1425A", dataOra);
 
   // Composizione
   const fette = [{ etichetta: "Crediti liberi", valore: io.crediti }].concat(
@@ -421,13 +485,28 @@ function disegnaClassifica() {
 /* ---------- Notizie ---------- */
 
 function disegnaNotizie() {
-  $("lista-notizie").innerHTML = S.notizie
-    .map((n) => `<li>
+  const admin = S.io.ruolo === "admin";
+  $("lista-notizie").innerHTML = S.notizie.length
+    ? S.notizie
+        .map(
+          (n) => `<li>
       <time>${ora(n.t)}</time>
       <span class="etichetta ${n.tipo}">${n.tipo === "boom" ? "rialzo" : n.tipo === "crollo" ? "ribasso" : "mercato"}</span>
-      <span>${esc(n.testo)}${n.variazione ? ` <b class="${segno(n.variazione)}">${conSegno(n.variazione)}%</b>` : ""}</span>
-    </li>`)
-    .join("");
+      <span class="notizia-testo">${esc(n.testo)}${n.variazione ? ` <b class="${segno(n.variazione)}">${conSegno(n.variazione)}%</b>` : ""}</span>
+      ${admin ? `<button class="notizia-elimina" title="Elimina questa notizia" data-notizia="${n.id || ""}">✕</button>` : ""}
+    </li>`
+        )
+        .join("")
+    : `<li class="vuoto">Nessuna notizia per ora.</li>`;
+
+  if (admin) {
+    document.querySelectorAll("[data-notizia]").forEach((b) => {
+      b.onclick = () => {
+        if (!b.dataset.notizia) return; // notizie storiche senza id, create prima di questo aggiornamento
+        azioneAdmin("admin/notizia", { azione: "elimina", id: b.dataset.notizia });
+      };
+    });
+  }
 }
 
 /* ---------- Amministrazione ---------- */
@@ -443,7 +522,7 @@ async function azioneAdmin(rotta, corpo) {
   try {
     const dati = await api(rotta, corpo);
     aggiorna(dati.stato);
-    messaggioAdmin(dati.messaggio || "Fatto.");
+    if (dati.messaggio) messaggioAdmin(dati.messaggio);
   } catch (err) {
     messaggioAdmin(err.message, false);
   }
@@ -455,18 +534,32 @@ function disegnaAdmin() {
   selezione.innerHTML = S.titoli.map((t) => `<option value="${t.sigla}">${t.sigla} — ${esc(t.nome)}</option>`).join("");
   if (precedente) selezione.value = precedente;
 
-  $("corpo-admin-titoli").innerHTML = S.titoli.map((t) => `<tr>
-      <td class="sigla">${t.sigla}</td>
+  const valoriInCorso = {};
+  document.querySelectorAll("#corpo-admin-titoli input[data-riga]").forEach((inp) => {
+    if (document.activeElement === inp || inp.dataset.toccato === "1") {
+      valoriInCorso[inp.dataset.riga + ":" + inp.dataset.campo] = inp.value;
+    }
+  });
+
+  $("corpo-admin-titoli").innerHTML = S.titoli.map((t) => `<tr class="${t.attivo ? "" : "spento-riga"}">
+      <td><span class="sigla">${t.sigla}</span></td>
       <td>${esc(t.nome)}</td>
-      <td class="num mono">${fmt(t.prezzo)}</td>
-      <td class="num mono">${t.volatilita}</td>
+      <td class="num"><input class="input-riga mono" type="number" step="0.01" min="0.01" value="${t.prezzo}" data-riga="${t.sigla}" data-campo="prezzo"></td>
+      <td class="num"><input class="input-riga mono" type="number" step="0.001" min="0.002" max="0.2" value="${t.volatilita}" data-riga="${t.sigla}" data-campo="volatilita"></td>
       <td>${t.attivo ? "quotato" : "ritirato"}</td>
       <td class="riga-azioni">
+        <button class="mini" data-salva="${t.sigla}">Salva</button>
         <button class="mini" data-titolo="${t.attivo ? "rimuovi" : "riattiva"}" data-sigla="${t.sigla}">${t.attivo ? "Ritira" : "Riquota"}</button>
         <button class="mini pericolo" data-elimina="${t.sigla}">Elimina</button>
       </td>
     </tr>`).join("") ||
     `<tr><td colspan="6" class="vuoto">Nessun titolo quotato. Aggiungine uno qui sopra.</td></tr>`;
+
+  document.querySelectorAll("#corpo-admin-titoli input[data-riga]").forEach((inp) => {
+    const chiave = inp.dataset.riga + ":" + inp.dataset.campo;
+    if (chiave in valoriInCorso) inp.value = valoriInCorso[chiave];
+    inp.addEventListener("input", () => { inp.dataset.toccato = "1"; });
+  });
 
   $("corpo-admin-utenti").innerHTML = S.classifica.map((u) => `<tr>
       <td>${esc(u.username)}${u.ruolo === "admin" ? " <small class='sotto'>admin</small>" : ""}</td>
@@ -489,6 +582,16 @@ function disegnaAdmin() {
 
   document.querySelectorAll("[data-titolo]").forEach((b) => {
     b.onclick = () => azioneAdmin("admin/titolo", { azione: b.dataset.titolo, sigla: b.dataset.sigla });
+  });
+  document.querySelectorAll("[data-salva]").forEach((b) => {
+    b.onclick = () => {
+      const sigla = b.dataset.salva;
+      const prezzo = document.querySelector(`[data-riga="${sigla}"][data-campo="prezzo"]`).value;
+      const volatilita = document.querySelector(`[data-riga="${sigla}"][data-campo="volatilita"]`).value;
+      azioneAdmin("admin/titolo", { azione: "modifica", sigla, prezzo, volatilita }).then(() => {
+        document.querySelectorAll(`[data-riga="${sigla}"]`).forEach((inp) => delete inp.dataset.toccato);
+      });
+    };
   });
   document.querySelectorAll("[data-elimina]").forEach((b) => {
     b.onclick = () => {

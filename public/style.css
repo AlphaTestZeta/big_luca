@@ -124,7 +124,14 @@ main{max-width:1180px;margin:0 auto;padding:1.5rem}
 .pillola.giu{background:#FDEBEE}
 .grafico{width:100%;height:220px;margin-top:1rem;display:block}
 #grafico-portafoglio{height:200px}
-.grafico-assi{display:flex;justify-content:space-between;font-family:"Roboto Mono",monospace;font-size:.72rem;color:var(--spento);margin-top:.2rem}
+.grafico-cont{position:relative}
+.grafico-tip{
+  position:absolute;transform:translate(-50%,-120%);pointer-events:none;
+  background:var(--inchiostro);color:#fff;padding:.4rem .6rem;border-radius:7px;
+  font-size:.76rem;line-height:1.25;white-space:nowrap;box-shadow:0 6px 16px rgba(20,24,31,.2);z-index:3;
+}
+.grafico-tip b{display:block;font-family:"Roboto Mono",monospace;font-size:.88rem;font-weight:500}
+.grafico-tip small{color:#C9CEDA;font-size:.68rem}
 .stat-riga{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.8rem;margin:1rem 0;border-top:1px solid var(--linea);padding-top:1rem}
 .stat{display:flex;flex-direction:column}
 .stat b{font-family:"Roboto Mono",monospace;font-weight:500;font-size:1rem}
@@ -158,10 +165,14 @@ main{max-width:1180px;margin:0 auto;padding:1.5rem}
 .notizie{list-style:none;margin:0;padding:0}
 .notizie li{display:flex;gap:.9rem;padding:.7rem 0;border-bottom:1px solid var(--linea);align-items:baseline}
 .notizie li:last-child{border-bottom:0}
+.notizie li.vuoto{color:var(--spento);font-size:.88rem}
 .notizie time{font-family:"Roboto Mono",monospace;font-size:.75rem;color:var(--spento);min-width:4rem}
 .notizie .etichetta{font-size:.72rem;padding:.1rem .45rem;border-radius:99px;background:var(--fondo);color:var(--spento)}
 .notizie .etichetta.boom{background:#E4F6EF;color:var(--su)}
 .notizie .etichetta.crollo{background:#FDEBEE;color:var(--giu)}
+.notizie .notizia-testo{flex:1}
+.notizia-elimina{border:0;background:none;color:var(--spento);padding:.1rem .3rem;font-size:.8rem;border-radius:6px;line-height:1}
+.notizia-elimina:hover{color:var(--giu);background:#FDEBEE}
 
 /* ---------- Amministrazione ---------- */
 .modulo{display:flex;flex-direction:column;gap:.5rem;margin-bottom:.8rem}
@@ -169,6 +180,7 @@ main{max-width:1180px;margin:0 auto;padding:1.5rem}
 .mini{padding:.3rem .55rem;font-size:.8rem}
 .mini.pericolo{border-color:var(--giu);color:var(--giu)}
 .mini.pericolo:hover{background:#FDEBEE;border-color:var(--giu)}
+.input-riga{width:88px;padding:.35rem .4rem;font-size:.82rem;text-align:right}
 .riga-azioni{display:flex;gap:.35rem;flex-wrap:wrap}
 .campo-crediti{display:flex;gap:.35rem;align-items:center}
 .campo-crediti input{width:110px;padding:.3rem .5rem;font-size:.8rem}
