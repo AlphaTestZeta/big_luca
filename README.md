@@ -30,10 +30,11 @@ Non usare il caricamento "drag & drop" della cartella: in quel caso Netlify non 
 
 ## Come funziona il mercato
 
-- Ogni titolo si muove una volta al minuto con una variazione casuale, tarata sulla sua volatilità.
+- Ogni titolo si muove ogni 20 secondi con una variazione casuale, tarata sulla sua volatilità.
 - I minuti passati mentre nessuno guardava vengono recuperati alla prima visita (fino a 2 ore: così di notte il mercato non impazzisce).
-- A ogni minuto c'è circa il 6% di probabilità che un titolo abbia un crollo o un boom tra l'8% e il 30%, con la notizia relativa.
-- L'amministratore può forzare un evento di qualsiasi percentuale e pubblicare notizie sue.
+- A ogni aggiornamento c'è circa il 6% di probabilità che un titolo abbia un crollo o un boom tra l'8% e il 30%, con la notizia relativa.
+- L'amministratore può forzare un evento di qualsiasi percentuale, pubblicare notizie sue ed eliminare quelle che non servono più.
+- I grafici hanno una griglia con i valori e, passandoci sopra il mouse (o il dito, su telefono), mostrano il valore esatto e l'orario di quel punto.
 
 ## Ritirare o eliminare un titolo
 
@@ -42,6 +43,8 @@ Nella tabella dei titoli del pannello ci sono due bottoni diversi:
 - **Ritira** lo toglie dagli scambi ma lo lascia nel sistema. Chi lo possiede se lo tiene in portafoglio e tu puoi rimetterlo in listino con **Riquota**. Utile se vuoi solo sospendere le contrattazioni.
 - **Elimina** lo cancella per sempre: sparisce dal listino, dai grafici e dalle notizie che lo riguardavano. Non si torna indietro. Siccome qualcuno potrebbe averne delle azioni, il sito ti chiede cosa farne: **rimborso al prezzo attuale** (le azioni vengono vendute d'ufficio e i crediti tornano agli utenti, con l'operazione registrata nel loro storico) oppure **niente rimborso**, cioè le azioni vanno in fumo e i crediti spesi sono persi. Il secondo caso è perfetto se vuoi mettere in scena un fallimento.
 
+Nella stessa tabella puoi anche cambiare prezzo e volatilità di un titolo in qualsiasi momento, anche mentre è ritirato: modifica i campi e premi «Salva». Utile per aggiustare un titolo troppo tranquillo o troppo instabile senza doverlo eliminare e ricreare.
+
 ## Manopole da regolare
 
 In `netlify/functions/api.mjs`, in cima al file:
@@ -49,8 +52,8 @@ In `netlify/functions/api.mjs`, in cima al file:
 | Riga | Cosa cambia |
 |---|---|
 | `CREDITI_INIZIALI` | crediti regalati a ogni nuovo account |
-| `TICK_MS` | ogni quanto si muovono i prezzi (60000 = un minuto) |
-| `MAX_RECUPERO` | quanti minuti di assenza vengono recuperati |
+| `TICK_MS` | ogni quanto si muovono i prezzi (20000 = 20 secondi) |
+| `MAX_RECUPERO` | quanti aggiornamenti di assenza vengono recuperati |
 | `MAX_STORICO` | quanti punti tiene il grafico |
 | `TITOLI_INIZIALI` | vuoto: se vuoi dei titoli già pronti al primo avvio, scrivili qui nel formato `["SIGLA", "Nome", "Settore", prezzo, volatilità]` |
 
